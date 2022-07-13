@@ -28,7 +28,7 @@ All scripts from extracting records from the tarball
 to training a language model are shown here in order
 Data comes from the [WMT16 Conference Document Alignment Shared Task](https://www.statmt.org/wmt16/bilingual-task.html)
 
-Machine Translation libraries are trained using the [fairseq library](https://fairseq.readthedocs.io/en/latest/index.html)
+Machine Translation models are trained using the [fairseq library](https://fairseq.readthedocs.io/en/latest/index.html)
 
 Below is the process of running scripts with samples
 

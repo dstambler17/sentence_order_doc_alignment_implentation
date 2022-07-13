@@ -6,8 +6,8 @@ conda activate "mt_dev"
 DATA_ROOT=/home/dstambl2/doc_alignment_implementations/data
 
 dataset_path=$1 #Ex: wmt16_test/fairseq_downstream_task
-src_lang=$2 #Ex: wmt16_test/fairseq_downstream_task
-tgt_lang=$3 #Ex: wmt16_test/fairseq_downstream_task
+src_lang=$2 #Ex: en
+tgt_lang=$3 #Ex: fr
 
 input_data=${DATA_ROOT}/${dataset_path}/data-bin/tokenized.${src_lang}-${tgt_lang}
 

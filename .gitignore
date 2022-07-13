@@ -1,0 +1,19 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+
+# C extensions
+*.so
+*.so.reload1
+
+# Project Specific
+*.en
+*.gz
+*.emb
+*.txt
+REFERENCE_DOC.md
+Checklist.md
+vec_align
+sample_wmt.matches
+prev_implementation_demo.py
+lang_id_models/

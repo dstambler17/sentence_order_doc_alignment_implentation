@@ -2,6 +2,7 @@
 Main File
 '''
 import argparse
+from multiprocessing.sharedctypes import Value
 import sys
 import math
 import json
@@ -14,12 +15,11 @@ import os
 
 
 import numpy as np
-from nltk.tokenize import wordpunct_tokenize
-from nltk.tokenize import sent_tokenize
 
 from modules.scorer import CosineSimilarity, DocPairReScorer#, EnglishWordExtractor, _ngram_helper
-from modules.matcher import ApproximateNearestNeighborSearch, competivieMatchingAlgorithm
-from utils.common import function_timer, load_extracted, map_dic2list, flatten_2d_list, replace_newline, clean_doc_item, filter_empty_docs
+from modules.matcher import ApproximateNearestNeighborSearch, competivie_matching_algorithm, match_based_on_mover_distance
+from utils.common import function_timer, load_extracted, map_dic2list, \
+                        flatten_2d_list, replace_newline, clean_doc_item, filter_empty_docs, tokenize_doc_to_sentence
 
 from modules.build_document_vector import build_document_vector
 from modules.vector_modules.boiler_plate_weighting import LIDFDownWeighting
@@ -27,6 +27,8 @@ from sklearn.decomposition import PCA
 
 from modules.get_embeddings import load_embeddings, make_embedding_metadata
 from modules.vector_modules.window_func import ModifiedPertV2
+
+from sentence_mover_dist_modules.get_document_weights import get_document_weights
 
 
 def fit_pca_reducer(embedding_list_src, embedding_list_tgt):
@@ -101,9 +103,6 @@ def align_docs(args):
     NOTE: This implementation is language agnostic
     '''
 
-    lang_code_english = args.lang_code_src
-    lang_code_foreign = args.lang_code_tgt
-
     docs_english = load_extracted(args.english)
     docs_foreign = load_extracted(args.foreign)
     print(len(docs_english), len(docs_foreign), "INFO")
@@ -112,7 +111,7 @@ def align_docs(args):
     docs_english = filter_empty_docs(docs_english) #IMPORTANT: FILTERS OUT HTML
     docs_foreign = filter_empty_docs(docs_foreign) #IMPORTANT: FILTERS OUT HTML
     print(len(docs_english), len(docs_foreign), "NUM NON EMPTY DOCS")
-
+        
     obj_english = map_dic2list(docs_english)
     obj_foreign = map_dic2list(docs_foreign)
     
@@ -139,8 +138,12 @@ def align_docs(args):
                                                         lookup_dict, args.lang_code_tgt, embed_folder_name, no_write=args.no_embed_write)
 
     #Tokenizes by sentences only    
-    english_text_list_tokenized = [[replace_newline(sent, " ") for sent in sent_tokenize(doc)] for doc in english_text_list]
-    foreign_text_list_tokenized = [[replace_newline(sent, " ") for sent in sent_tokenize(doc)] for doc in foreign_text_list]
+    #english_text_list_tokenized = [[replace_newline(sent, " ") for sent in sent_tokenize(doc)] for doc in english_text_list]
+    #foreign_text_list_tokenized = [[replace_newline(sent, " ") for sent in sent_tokenize(doc)] for doc in foreign_text_list]
+    
+    english_text_list_tokenized = [tokenize_doc_to_sentence(doc, args.lang_code_src) for doc in english_text_list]
+    foreign_text_list_tokenized = [tokenize_doc_to_sentence(doc, args.lang_code_tgt) for doc in foreign_text_list]
+
 
     ##Create PCA dim reducer and USE LIDF, also pert object
     lidf_weighter = LIDFDownWeighting(english_text_list_tokenized + foreign_text_list_tokenized)
@@ -154,15 +157,38 @@ def align_docs(args):
     for_doc_vecs, for_docs = build_src_target_lists(foreign_text_list_tokenized, obj_foreign['mapping'],
                                                      embedding_list_for, lidf_weighter, pca, pert_obj, args.doc_vector_method)
     
-    #Get candidate list from Approx KNN
-    vector_dimension_size = eng_doc_vecs.shape[1]
-    searcher = ApproximateNearestNeighborSearch(vector_dimension_size)
-    candidate_list = searcher.build_candidate_pair_list(eng_docs, for_docs, eng_doc_vecs, for_doc_vecs, K_VAL=args.k_val)
-    print("Len cand list is %s" % len(candidate_list))
+    #In this part, build initial candidate pairs based on different approaches
     
+    if args.first_scoring_method == 'approx_knn':
+        #Get candidate list from Approx KNN
+        vector_dimension_size = eng_doc_vecs.shape[1]
+        searcher = ApproximateNearestNeighborSearch(vector_dimension_size)
+        candidate_list = searcher.build_candidate_pair_list(eng_docs, for_docs, eng_doc_vecs, for_doc_vecs, K_VAL=args.k_val)
+        print("Len cand list is %s" % len(candidate_list))
+    elif args.first_scoring_method == 'sentence_mover_distance':
+        #Get Document weights and update the document_object TODO: reduce dup logic below
+        print('Using Distance Movers method')
+            
+        eng_weights = get_document_weights(english_text_list_tokenized, args.lang_code_src)
+        for_weights = get_document_weights(foreign_text_list_tokenized, args.lang_code_tgt)
+        if len(eng_weights) != len(eng_docs) or len(for_weights) != len(for_docs):
+            raise ValueError("Weight lists and Doc Obj lists must have the same size but \
+                             Got src_weights_len: %d, src_docs_len: %d, tgt_weights_len: %d, tgt_docs_len %d" 
+                             % (len(eng_weights), len(eng_docs), len(for_weights), len(for_docs)))
+
+        for idx, weight in enumerate(eng_weights):
+            eng_docs[idx].weights = weight
+        for idx, weight in enumerate(for_weights):
+            for_docs[idx].weights = weight
+        
+        candidate_list = match_based_on_mover_distance(eng_docs, for_docs)
+        print("Len cand list is %s" % len(candidate_list))
+    else:
+        candidate_list = []
+        
     #Rescore and align docs
     rescore_candidates(candidate_list, 'en', 'fr')
-    aligned_documents = competivieMatchingAlgorithm(candidate_list, use_rescore=args.use_rescore)
+    aligned_documents = competivie_matching_algorithm(candidate_list, use_rescore=args.use_rescore, method=args.first_scoring_method)
     print("Len aligned_documents is %s" % len(aligned_documents))
 
     #Write alignments
@@ -177,11 +203,6 @@ if __name__ == "__main__":
         '--english', help='path to the extracted English text', required=True)
     parser.add_argument(
         '--foreign', help='path to the translated foreign text', required=True)
-    parser.add_argument('--min_count', type=int, default=2) #NOTE: might not need
-    parser.add_argument('--ngram_size', type=int, default=2) #NOTE: might not need
-    parser.add_argument('--tfidfsmooth', type=int, default=20) #NOTE: might not need
-    parser.add_argument(
-        '--ignore', help='n-grams from this corpus will be ignored in distance scorer')
 
     parser.add_argument('--output_matches', help='path to output sent alignments to', required=True)
     parser.add_argument('--output_sentences', help='path to output sent alignments to', required=True)
@@ -196,6 +217,9 @@ if __name__ == "__main__":
     parser.add_argument('--no_embed_write', help="Set to true if you don't want to write embeddings", action='store_true')
     
     parser.add_argument('--k_val', help="K Value for Approx K nearest enighbors search", type=int, required=True)
+    parser.add_argument('--first_scoring_method', help="Decide which method to get initial scores", default='approx_knn',
+                        choices=["approx_knn", 'sentence_mover_distance'])
+    
     parser.add_argument('--use_rescore', help="Set to true if you wish to use rescore in competitvie matching", action='store_true')
     
     

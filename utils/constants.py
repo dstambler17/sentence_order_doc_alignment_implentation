@@ -4,13 +4,15 @@ class DocumentInfo():
     '''
     Contains Different Representations of the document
     '''
-    def __init__(self, doc_vector, url, sentence_embeddings, tokenized_document):
+    def __init__(self, doc_vector, url, sentence_embeddings, sentence_embeddings_unreduced, tokenized_document):
         self.id = uuid.uuid1()
         self.doc_vector = doc_vector
         self.url = url
         self.sentence_embeddings = sentence_embeddings
+        self.sentence_embeddings_unreduced = sentence_embeddings_unreduced
         self.tokenized_document = tokenized_document
         self.dictified_doc = self._dictify_sentences()
+        self.weights = None # Used only in the Greedy Mover Distance Implementation
     
     def _dictify_sentences(self):
         '''

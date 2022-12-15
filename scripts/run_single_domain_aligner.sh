@@ -23,6 +23,8 @@ export LASER="/home/dstambl2/LASER"
 #Goal, print out all doc pair alignments and all sentence alignments
 #wget -O /tmp/lid.176.bin https://dl.fbaipublicfiles.com/fasttext/supervised-models/lid.176.bin
 
+#  --use_rescore #TODO: Use rescore should be a command line arg
+
 python3 /home/dstambl2/doc_alignment_implementations/thompson_2021_doc_align/align_docs.py \
     --english $src_path \
     --foreign $tgt_path \
@@ -34,6 +36,6 @@ python3 /home/dstambl2/doc_alignment_implementations/thompson_2021_doc_align/ali
     --batch_size 1000 \
     --doc_vector_method SENT_ORDER \
     --no_embed_write --k_val $k_val \
-    --use_rescore
+    --first_scoring_method "sentence_mover_distance"
 
 

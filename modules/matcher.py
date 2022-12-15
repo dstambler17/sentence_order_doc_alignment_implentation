@@ -1,6 +1,10 @@
 import faiss
+from threading import Lock
+
 from utils.constants import CandidatePair
+from utils.worker_manager import WorkerManager, MultithreadParams
 from utils.common import function_timer
+from sentence_mover_dist_modules.greedy_mover_distance import greedy_mover_distance
 
 class ApproximateNearestNeighborSearch():
     '''
@@ -58,8 +62,64 @@ class ApproximateNearestNeighborSearch():
 
         return candidate_pairs
 
+
+''' LOGIC for parrallelizing Greedy distance movers'''
+class GreeyDistanceMoversParams(MultithreadParams):
+    def __init__(self, src_doc, tgt_doc, call_number):
+        self.src_doc = src_doc
+        self.tgt_doc = tgt_doc
+        self.call_number = call_number
+        super(GreeyDistanceMoversParams, self).__init__()
+    
+    def get_params(self):
+        return self.src_doc, self.tgt_doc, self.call_number
+
+
 @function_timer
-def competivieMatchingAlgorithm(candidate_pairs, use_rescore=True):
+def match_based_on_mover_distance(src_docs, tgt_docs):
+    '''
+    Creates Candidate Pairs from Greedy Mover Distance
+    The advantage here is that no averaging/info loss
+    needs to be done, so no need to build
+    Paper Src: https://arxiv.org/pdf/2002.00761.pdf
+    Github Src: https://github.com/JanakaSandaruwan/El-Kishky-Guzman-Document-Alignment/blob/master/main.py
+    '''
+    
+    candidate_pairs = []
+    lock = Lock()
+
+    
+    def sentence_movers_multithread_handler(greedy_dist_mover_params : GreeyDistanceMoversParams):
+        src_doc, tgt_doc, call_number = greedy_dist_mover_params.get_params()
+        score =greedy_mover_distance(src_doc.sentence_embeddings_unreduced.copy(),
+                            tgt_doc.sentence_embeddings_unreduced.copy(),
+                            src_doc.weights.copy(),
+                            tgt_doc.weights.copy()
+                            )
+        print(call_number)
+        #nonlocal embedding_list
+        nonlocal candidate_pairs
+        nonlocal lock
+        with lock:
+            candidate_pairs.append(CandidatePair(src_doc, tgt_doc, score))
+    
+    worker_manager = WorkerManager(sentence_movers_multithread_handler, 20)
+    worker_manager.start()
+
+    
+    call_number = 0
+    for src_doc in src_docs:
+        for tgt_doc in tgt_docs:
+            call_number += 1
+            greedy_dist_mover_params = GreeyDistanceMoversParams(src_doc, tgt_doc, call_number)
+            worker_manager.put(greedy_dist_mover_params, call_number)
+    
+    worker_manager.stop()
+    return candidate_pairs
+
+
+@function_timer
+def competivie_matching_algorithm(candidate_pairs, use_rescore=True, method=''):
     '''
     Competitive Matching Algorithm from Buck Koehn Paper
     input list of candidate pair object
@@ -69,7 +129,11 @@ def competivieMatchingAlgorithm(candidate_pairs, use_rescore=True):
     #However, Approx KNN uses cosine sim, which is why we need to reverse
     if use_rescore:
         candidate_pairs.sort(key=lambda x: x.rescore, reverse=True)
+    elif method == 'sentence_mover_distance':
+        print('Sorting by sentence movers')
+        candidate_pairs.sort(key=lambda x: x.score)
     else:
+        print('Sorting by sentence others')
         candidate_pairs.sort(key=lambda x: x.score, reverse=True)
     aligned = []
     S_one, S_two = {}, {}

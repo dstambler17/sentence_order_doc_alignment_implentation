@@ -1,15 +1,20 @@
 
 ##!/bin/bash
 
+source /home/dstambl2/miniconda3/etc/profile.d/conda.sh
+conda activate "mt_dev"
+PYTHONPATH="/home/dstambl2/doc_alignment_implementations/thompson_2021_doc_align"
+LASER="/home/dstambl2/LASER"
+
 
 #Creates preprocessed training dataset from aligned sentences
 DATA_ROOT=/home/dstambl2/doc_alignment_implementations/data
 PYTHON_ROOT=/home/dstambl2/doc_alignment_implementations/thompson_2021_doc_align
 
-input_folder=$1 #ex: wmt16_test/aligned_sentences
-output_folder=$2 #ex: wmt16_test/fairseq_downstream_task
-src_lang=$3
-tgt_lang=$4
+input_folder=$1 #sinhala_data/aligned_sentence_pairs/buck_baseline
+output_folder=$2 #ex: sinhala_data/fairseq_downstream_task/buck_baseline
+src_lang=$3 #si, the foreign lang
+tgt_lang=$4 #en, the tgt lang
 
 input_file_path=${DATA_ROOT}/${input_folder}
 output_path=${DATA_ROOT}/${output_folder}
@@ -25,12 +30,11 @@ cat $input_file_path/*-final-${tgt_lang}.alignments > $output_path/raw_data/all_
 #  perl $tokenizer -threads 8 -a -l en > ${DATASET}/${lang}.tok2
 
 
-python3 scripts/fairseq_model_train_scripts/handle_train_val_test_split.py \
+python3 ${PYTHON_ROOT}/scripts/fairseq_model_train_scripts/handle_train_val_test_split.py \
     --lang_code_src ${src_lang} \
     --lang_code_tgt ${tgt_lang} \
     --src_file $output_path/raw_data/all_sentences-${src_lang}.alignments \
-    --tgt_file $output_path/raw_data/all_sentences-${tgt_lang}.alignments \ 
-    --output_path $output_path/raw_data
+    --tgt_file $output_path/raw_data/all_sentences-${tgt_lang}.alignments --output_path $output_path/raw_data
 
 
 declare -a data_subsets=("train" "valid" "test")

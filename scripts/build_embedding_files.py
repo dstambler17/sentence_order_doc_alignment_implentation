@@ -83,6 +83,8 @@ if __name__ == "__main__":
     parser.add_argument(
         '--tgt_file', help='path to the translated foreign text', required=True)
     parser.add_argument('--domain_name', help='domain name. Will create an embedding sub dir', required=True)
+    
+    parser.add_argument('--dirname', help='data durname extension. Example: cc_aligned_si_data', required=True)
 
     args = parser.parse_args()
 
@@ -100,8 +102,9 @@ if __name__ == "__main__":
     lang_src_text_list = obj_lang_src['text']
     lang_tgt_text_list = obj_lang_tgt['text']
 
-    #TODO replace with arg
-    dirname = '/home/dstambl2/doc_alignment_implementations/data/wmt16_dev'#os.path.dirname(args.lang_tgt) 
+    #Define dur name base
+    DATA_DUR_NAME_BASE = '/home/dstambl2/doc_alignment_implementations/data/'
+    dirname = "%s/%s" % (DATA_DUR_NAME_BASE, args.dirname) #os.path.dirname(args.lang_tgt) 
 
     #Handle Sentence embedding logic:
     lookup_dict = make_embedding_metadata('',

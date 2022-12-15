@@ -69,7 +69,8 @@ class WorkerManager:
         '''
         def handle_stop():
             if self._stop:
-                print("queue is empty")
+                pass
+                #print("queue is empty")
         while not self._stop:
             self._lock.acquire()
             while not self._queue.empty():

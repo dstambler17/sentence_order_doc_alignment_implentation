@@ -1,8 +1,8 @@
 #!/bin/bash
 
 ALIGNER_SCRIPT_PATH="/home/dstambl2/doc_alignment_implementations/buck_aligner"
-resources='hostname=c*,mem_free=20g,ram_free=30g'
-log_dir_base='/home/dstambl2/doc_alignment_implementations/data/logs/wmt16_dev/buck_16_baseline' #TODO: replace with input
+MEM_RESOURCES='mem_free=20g,ram_free=30g'
+LOG_PATH_ROOT='/home/dstambl2/doc_alignment_implementations/data/logs'
 
 # Processes all let and unzips them
 #$ALIGNER_SCRIPT_PATH/document-align-buck-malign.bash $ouput_path $lang $domain_name
@@ -22,9 +22,18 @@ if [ -z $3 ] ; then
   exit
 fi
 
+if [ -z $4 ] ; then
+  echo "provide the log path"
+  exit
+fi
+
+
 input_path=$1
 ouput_path=$2
 lang=$3
+
+log_dir_base=$LOG_PATH_ROOT/$4 #ex: wmt16_dev/buck_16_baseline
+resources="hostname=${5}*,$MEM_RESOURCES" #ex: $5 is either 'c' or b
 
 for entry in "$input_path"/*
 do
@@ -36,7 +45,7 @@ do
 
   cp $entry $ouput_path
   #$ALIGNER_SCRIPT_PATH/document-align-buck-malign.bash $ouput_path $lang $domain_name
-
+  
   qsub -j y -o $log_dir_base/$domain_name.out \
     -l $resources \
     ${ALIGNER_SCRIPT_PATH}/document-align-buck-malign.bash $ouput_path $lang $domain_name

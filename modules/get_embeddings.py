@@ -8,17 +8,16 @@ import json
 import numpy as np
 from pathlib import Path
 from threading import Lock
-from nltk.tokenize import sent_tokenize
 from utils.worker_manager import WorkerManager, MultithreadParams
 
 
-from utils.common import function_timer, flatten_2d_list, replace_newline, clean_doc_item
+from utils.common import function_timer, flatten_2d_list, replace_newline, clean_doc_item, tokenize_doc_to_sentence
 
   
 #  Add LASER module to system path and import
 LASER = os.environ.get("LASER")
 sys.path.append("%s/source" % LASER)
-from embed import LaserMainArgs, embed_main
+#from embed import LaserMainArgs, embed_main
 
 
 
@@ -50,7 +49,7 @@ def make_embedding_metadata(path, DEFAULT_DIR='', EMBED_PATH="/embeddings/embedd
 
 #QUESTION: SHOULD WE ONLY EMBED THE SAME LINE ONCE EVEN FOR DOC ALIGNMENT?
 #NOTE: Looks like there are better results when embedding by sentence?
-def read_in_embeddings(doc_text, embed_file):
+def read_in_embeddings(doc_text, embed_file, lang_code):
     """
     Given a text file with candidate sentences and a corresponing embedding file,
        make a maping from candidate sentence to embedding index, 
@@ -60,8 +59,8 @@ def read_in_embeddings(doc_text, embed_file):
     """
     doc_text = clean_doc_item(doc_text)
     sent2line = dict()
-    #tokenized_text = flatten_2d_list([item.split("\n") for item in  sent_tokenize(doc_text)])
-    tokenized_text = [replace_newline(sent, " ") for sent in sent_tokenize(doc_text)] #TEMP
+    #tokenized_text = [replace_newline(sent, " ") for sent in sent_tokenize(doc_text)] #TEMP
+    tokenized_text = tokenize_doc_to_sentence(doc_text, lang_code)
 
     num_sents = 0
     for ii, line in enumerate(tokenized_text):
@@ -82,7 +81,7 @@ def read_in_embeddings(doc_text, embed_file):
     if laser_embedding_size != 1024:
         #import pdb
         #pdb.set_trace()
-        raise Exception('expected an embedding size of 1024, got %s', laser_embedding_size)
+        raise Exception('expected an embedding size of 1024, got %s' % laser_embedding_size)
     #logger.info('laser_embedding_size determined to be %d', laser_embedding_size)
     line_embeddings.resize(line_embeddings.shape[0] // laser_embedding_size, laser_embedding_size)
     return sent2line, line_embeddings
@@ -119,18 +118,14 @@ def run_write_subprocess(encoder, token_lang, bpe_codes, embed_file_path, text_i
     #command_one = "echo %s" % text_input #cat %s input_file, TRY the echo appraoch to save embeddings
     #subprocess.run()
 
-
-def run_write(encoder, token_lang, bpe_codes, embed_file_path, text_input):
-    '''
-    New method, calls LASER directly via PYTHON
-    '''
-
+#NOTE: Probably should delete this
+'''def run_write(encoder, token_lang, bpe_codes, embed_file_path, text_input):
     laser_embed_args = LaserMainArgs(encoder=encoder,
                                      token_lang=token_lang,
                                      bpe_codes=bpe_codes,
                                      output=embed_file_path,
                                      verbose=True)    
-    embed_main(laser_embed_args, text_input)
+    embed_main(laser_embed_args, text_input)'''
 
 #Special multithreading function
 def write_embeddings(embed_file_path, doc_text, token_lang):
@@ -142,15 +137,18 @@ def write_embeddings(embed_file_path, doc_text, token_lang):
     bpe_codes="%s/93langs.fcodes" % (model_dir)
 
     #TODO: Confirm if this is the right way to do this
-    new_text = "\n".join([replace_newline(sent, " ") for sent in sent_tokenize(doc_text)])
+    #new_text = "\n".join([replace_newline(sent, " ") for sent in sent_tokenize(doc_text)])
+    new_text = "\n".join(tokenize_doc_to_sentence(doc_text, token_lang))
+
 
     run_write_subprocess(encoder, token_lang, bpe_codes, embed_file_path, new_text)
     #run_write(encoder, token_lang, bpe_codes, embed_file_path, new_text)
 
 
 
-@function_timer
-def load_embeddings(text_list, url_list, lookup_dict, lang_code, path, no_write=False):
+#@function_timer
+def load_embeddings(text_list, url_list, lookup_dict, lang_code, path,
+                    no_write=False):
     '''
     NOTE: We assume that text_list[i]
     corresponds w/ url_list[i]
@@ -173,7 +171,7 @@ def load_embeddings(text_list, url_list, lookup_dict, lang_code, path, no_write=
             lookup_dict[url] = embed_file_path
             new_embeddings += 1
         
-        _, embeddings = read_in_embeddings(doc_text, embed_file_path)
+        _, embeddings = read_in_embeddings(doc_text, embed_file_path, token_lang)
         
 
     #Set up worker manager
@@ -197,8 +195,9 @@ def load_embeddings(text_list, url_list, lookup_dict, lang_code, path, no_write=
     #Avoid parallization issues. Reading is very fast
     for ii in range(len(text_list)):
         url, doc_text = url_list[ii], text_list[ii]
+        
         embed_file_path = lookup_dict[url]
-        _, embeddings = read_in_embeddings(doc_text, embed_file_path)
+        _, embeddings = read_in_embeddings(doc_text, embed_file_path, lang_code)
         embedding_list.append(embeddings)
 
 

@@ -6,7 +6,12 @@ import time
 from collections import defaultdict, namedtuple
 from contextlib import contextmanager
 
+from nltk.tokenize import sent_tokenize
+from sinling import SinhalaTokenizer
+
+
 URL_RE = re.compile(r'https?\://(.*?)/', flags=re.IGNORECASE)
+BASE_DOMAIN_RE = re.compile(r'https?\://(?:w{3}\.)?(?:(?:si|en)\.)?(.*?)/', flags=re.IGNORECASE)
 
 Page = namedtuple(
     "Page", "url, html, text, mime_type, encoding, lang")
@@ -147,6 +152,19 @@ def regex_extractor_helper(compiled_regex, raw_text):
     if not matches:
         return None
     return matches[0]
+
+
+def tokenize_doc_to_sentence(doc_text, lang):
+    '''
+    Given a document and its language, tokenize according
+    to proper library
+    '''
+    if lang == 'si': #Special case for sinhala
+        sin_tokenizer = SinhalaTokenizer()
+        return [replace_newline(sent, " ") for sent in sin_tokenizer.split_sentences(doc_text)]
+    else:
+        return [replace_newline(sent, " ") for sent in sent_tokenize(doc_text)]
+    
 
 
 def flatten_2d_list(_2d_list):

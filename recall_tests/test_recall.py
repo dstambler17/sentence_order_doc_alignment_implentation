@@ -7,6 +7,8 @@ from Levenshtein import distance
 
 JOIN_TOKEN = "JOIN_TOKEN"
 EDIT_DIST_THRESH = 0.05
+
+#TODO: Change this later to be more flexible
 DIR_BASE_PATH = '/home/dstambl2/doc_alignment_implementations/data/wmt16_dev/processed/'
 
 

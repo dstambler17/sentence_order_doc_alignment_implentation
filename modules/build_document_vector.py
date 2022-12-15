@@ -100,7 +100,7 @@ def get_document_vector_v2(sentence_embeddings, bp_weighter, pert_obj, document)
     
     scaled_sent_embeds = np.multiply(sentence_embeddings.T, sent_weights).T
 
-    #### BEGIN PERT PART: TODO: move to func, replace magic nums #####
+    #### BEGIN PERT PART: TODO:  replace magic nums #####
     # equally space sentences
     sent_centers = np.linspace(0, 1, len(scaled_sent_embeds))
 
@@ -131,7 +131,7 @@ def build_document_vector(document: list, url: str, raw_laser_sentence_embedding
     #NOTE: Assume documents are list of sentences. Post tolkenization
     #QUESTION: is shape 2048 or (16, 128)
     
-    sentence_embeddings = raw_laser_sentence_embeddings
+    sentence_embeddings_unreduced = raw_laser_sentence_embeddings
     sentence_embeddings = pca.transform(raw_laser_sentence_embeddings) #FIT PCA HERE
     
     try:
@@ -140,7 +140,7 @@ def build_document_vector(document: list, url: str, raw_laser_sentence_embedding
     except Exception as e:
         #import pdb
         #pdb.set_trace()
-        print("exception for document build vector")
+        print("exception for document build vector, num sents doesn't match num sent embeds")
 
     if doc_vec_method == 'AVG':  #Avg approach
         document_vector = normalize_vector(get_average_sentence_embeddings(sentence_embeddings))
@@ -150,5 +150,5 @@ def build_document_vector(document: list, url: str, raw_laser_sentence_embedding
         document_vector = normalize_vector(get_document_vector_v2(sentence_embeddings, bp_weighter, pert_obj, document))
         #document_vector = normalize_vector(concat_document_subvectors(sentence_embeddings, bp_weighter, sub_vec_count, document))
 
-    doc = DocumentInfo(document_vector, url, sentence_embeddings, document)
+    doc = DocumentInfo(document_vector, url, sentence_embeddings, sentence_embeddings_unreduced, document)
     return doc

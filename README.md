@@ -43,16 +43,21 @@ wget http://data.statmt.org/wmt16/document-alignment-task/lett.test.tgz
 unzip lett.test.tgz -d /home/dstambl2/doc_alignment_implementations/data/wmt16_test/lett_files
 ```
 
+For reference, here is the logic to parse in tsv data
+```
+python3 scripts/process_tsv_files.py --input_file_exten en_XX-si_LK.tsv --lett_out_exten cc_aligned_si_data/lett_data/chunk --out_exten cc_aligned_si_data/processed/chunk --num_splits 100
+```
+
 ### 3) Process the Lett files, saving output to log file
 ```
-scripts/unzip.sh /home/dstambl2/doc_alignment_implementations/data/wmt16_test lett_files processed > unzip_processing_log.txt
+scripts/unzip.sh /home/dstambl2/doc_alignment_implementations/data/wmt16_test lett_files processed gz > /home/dstambl2/doc_alignment_implementations/data/logs/wmt16_test/unzip_processing_log.txt
 ```
 
 
 ## Running Document Alignments
 ### 1) Building the LASER embeddings for each Doc
 ```
-scripts/build_multi_embeds.sh /home/dstambl2/doc_alignment_implementations/data/wmt16_dev/processed en fr
+scripts/build_multi_embeds.sh /home/dstambl2/doc_alignment_implementations/data/wmt16_dev/processed en fr wmt16_dev/embed 2
 ```
 
 For single domain embeddings, sample:
@@ -63,13 +68,19 @@ python3 scripts/build_embedding_files.py     --src_file /home/dstambl2/doc_align
 
 ### 2) Running Aligner
 ```
-./scripts/multi_domain_doc_aligner.sh /home/dstambl2/doc_alignment_implementations/data/wmt16_dev en fr wmt16_dev/align/k_32_no_rescore aligned_doc_pairs/k_32_no_rescore 32
+./scripts/multi_domain_doc_aligner.sh /home/dstambl2/doc_alignment_implementations/data/wmt16_test en fr wmt16_test/align/k_32_no_rescore aligned_doc_pairs/k_32_no_rescore 32
 ```
 
 To run for a single domain
 
 ```
 scripts/run_single_domain_aligner.sh         /home/dstambl2/doc_alignment_implementations/data/wmt16_dev/processed/kicktionary.de.en.gz /home/dstambl2/doc_alignment_implementations/data/wmt16_dev/processed/kicktionary.de.fr.gz en fr         /home/dstambl2/doc_alignment_implementations/data/wmt16_dev/aligned_doc_pairs/k_8_no_rescore/kicktionary.de.en-fr.fr.matches /home/dstambl2/doc_alignment_implementations/data/wmt16_dev/aligned_sentences/kicktionary.de.en-fr.fr.aligned 8
+```
+
+Or
+
+```
+scripts/run_single_domain_aligner.sh         /home/dstambl2/doc_alignment_implementations/data/wmt16_dev/processed/schackportalen.nu.en.gz /home/dstambl2/doc_alignment_implementations/data/wmt16_dev/processed/schackportalen.nu.fr.gz en fr         /home/dstambl2/doc_alignment_implementations/data/wmt16_dev/aligned_doc_pairs/greedy_sentence_method_no_rescore/schackportalen.nu.en-fr.fr.matches /home/dstambl2/doc_alignment_implementations/data/wmt16_dev/aligned_sentences/schackportalen.nu.en-fr.fr.aligned 8
 ```
 
 ### 3) Evaluating Recall
@@ -79,6 +90,30 @@ scripts/recall.sh /home/dstambl2/doc_alignment_implementations/data/wmt16_train.
 
 ## Downstream sentence Alignment and Model Training
 ### 1) Run Sentence Aligner scripts (also can be run with scripts/sentence_alignment_scripts/run_sent_aligner.sh)
+
+```
+resources="hostname=b*,mem_free=20G,ram_free=30G,gpu=1"
+log_dir_base="/home/dstambl2/doc_alignment_implementations/data/logs/classifier_training"
+
+
+`cat *.matches > all_matched_pairs.matches`
+
+
+### Much better script to run for multi sent aligner
+```
+scripts/sentence_alignment_scripts/run_multi_sentence_aligner.sh en si sinhala_data/sentence_align/buck sinhala_data/aligned_sentence_pairs/buck_baseline sinhala_data/aligned_doc_pairs/buck_baseline sinhala_data/processed_pre_11_06_2018
+```
+
+qsub -N sent_align_buck -j y -o /home/dstambl2/doc_alignment_implementations/data/logs/sinhala_data/sentence_align/buck/sent_align.out \
+-l hostname=c*,mem_free=120G,ram_free=120G,gpu=1 \
+/home/dstambl2/doc_alignment_implementations/thompson_2021_doc_align/scripts/sentence_alignment_scripts/run_sent_aligner.sh \
+sinhala_data/aligned_sentence_pairs/buck_baseline \
+sinhala_data/aligned_doc_pairs/buck_baseline \
+sinhala_data/processed_pre_11_06_2018 \
+en si \
+all_matched_pairs 1
+```
+
 ```
 python3 scripts/sentence_alignment_scripts/build_docs.py --matches wmt16_test/aligned_doc_pairs/belnois.com.matches --threshold 0.0 -d wmt16_test/processed --src_lang en --target_lang fr > combined_docs.txt
 ```
@@ -114,6 +149,13 @@ python3 scripts/sentence_alignment_scripts/generate_aligned_sentences.py --src_d
 Preprocess
 ```
 scripts/fairseq_model_train_scripts/preprocess.sh wmt16_test/aligned_sentences wmt16_test/fairseq_downstream_task en fr
+```
+
+Or
+```
+./submit_preprocess_bleu.sh wmt16_test/aligned_sentences wmt16_test/fairseq_downstream_task fr en
+
+./submit_preprocess_bleu.sh sinhala_data/aligned_sentence_pairs/buck_baseline sinhala_data/fairseq_downstream_task/buck_baseline si en
 ```
 
 Train a model
